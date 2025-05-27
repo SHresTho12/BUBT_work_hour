@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "BUBT HR Attendance Tracker",
+  "version": "1.0",
+  "description": "Shows weekly and monthly working hours from BUBT HR portal.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://hr.bubt.edu.bd/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icons/icon48.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon48.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://hr.bubt.edu.bd/bubt/Dashboard.aspx"],
+      "js": ["content.js"]
+    }
+  ]
+}

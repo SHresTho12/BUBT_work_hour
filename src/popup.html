@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Attendance Summary</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 10px;
+            min-width: 250px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #0056b3;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        div {
+            margin-bottom: 8px;
+        }
+
+        strong {
+            display: inline-block;
+            width: 80px;
+            /* Adjusted for better alignment */
+            color: #555;
+        }
+
+        #message {
+            color: gray;
+            font-style: italic;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>BUBT HR Attendance</h3>
+    <div id="message">Loading data...</div>
+    <div id="weeklyHours" style="display:none;"><strong>This Week:</strong> <span id="weeklyValue"></span> hours</div>
+    <div id="prevWeeklyHours" style="display:none;"><strong>Prev Week:</strong> <span id="prevWeeklyValue"></span> hours
+    </div>
+    <div id="monthlyHours" style="display:none;"><strong>This Month:</strong> <span id="monthlyValue"></span> hours
+    </div>
+    <button id="togglePrevMonthBtn" style="display:none;">Toggle Previous Month</button>
+    <div id="prevMonthlyHours" style="display:none;"><strong>Prev Month:</strong> <span id="prevMonthlyValue"></span>
+        hours</div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
