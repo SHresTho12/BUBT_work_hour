@@ -1,24 +1,21 @@
-// Function to parse HTML and calculate attendance data
 function parseAttendanceData() {
   const dailyAttendanceTable = document.getElementById("MainContent_GridView2");
-
   if (!dailyAttendanceTable) {
-    return {
-      status: "error",
-      message: "Attendance table not found on the page.",
-    };
+    return { status: "error", message: "Attendance table not found." };
   }
 
-  const attendanceRecords = [];
-
   const rows = dailyAttendanceTable.querySelectorAll("tbody tr");
+  const attendanceRecords = [];
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
   rows.forEach((row) => {
     const cells = row.querySelectorAll("td");
-
     if (cells.length >= 7) {
-      const dateSpan = cells[1].querySelector("span");
-      const dayStatusSpan = cells[2].querySelector("span");
-      const workingHourSpan = cells[5].querySelector("span");
+      const dateSpan = cells[1]?.querySelector("span");
+      const dayStatusSpan = cells[2]?.querySelector("span");
+      const inTimeSpan = cells[3]?.querySelector("span"); // In time
+      const workingHourSpan = cells[5]?.querySelector("span");
 
       const dateText = dateSpan ? dateSpan.textContent.trim() : "";
       const dayStatusText = dayStatusSpan
@@ -27,64 +24,78 @@ function parseAttendanceData() {
       const workingHourText = workingHourSpan
         ? workingHourSpan.textContent.trim()
         : "";
+      const inTimeText = inTimeSpan ? inTimeSpan.textContent.trim() : "";
 
-      if (dayStatusText.toLowerCase() === "working day" && workingHourText) {
-        const [hours, minutes, seconds] = workingHourText
-          .split(":")
-          .map(Number);
-        const totalWorkingSeconds = hours * 3600 + minutes * 60 + seconds;
+      if (!dateText) return;
 
-        const [day, month, yearPart] = dateText.split(" ");
-        const formattedDateString = `${month} ${day}, ${
-          yearPart.split(" ")[0]
-        }`; // Ensure year is just the number
-        const recordDate = new Date(formattedDateString);
-        recordDate.setHours(0, 0, 0, 0); // Normalize date to start of day for comparison
+      const [day, month, yearPart] = dateText.split(" ");
+      const formattedDateString = `${month} ${day}, ${yearPart.split(" ")[0]}`;
+      const recordDate = new Date(formattedDateString);
+      recordDate.setHours(0, 0, 0, 0);
+
+      if (dayStatusText.toLowerCase() === "working day") {
+        let totalWorkingSeconds = 0;
+
+        if (workingHourText) {
+          const [h, m, s] = workingHourText.split(":").map(Number);
+          totalWorkingSeconds = h * 3600 + m * 60 + s;
+        } else {
+          // --- Handle "today" with ongoing work ---
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (recordDate.getTime() === today.getTime() && inTimeText) {
+            // Parse in-time (e.g., "09:12 AM")
+            const [timePart, meridiem] = inTimeText.split(" ");
+            const [hourStr, minStr] = timePart.split(":");
+            let hours = parseInt(hourStr);
+            const minutes = parseInt(minStr);
+            if (meridiem?.toLowerCase() === "pm" && hours < 12) hours += 12;
+            if (meridiem?.toLowerCase() === "am" && hours === 12) hours = 0;
+
+            const inDateTime = new Date();
+            inDateTime.setHours(hours, minutes, 0, 0);
+
+            const diffSeconds = Math.floor(
+              (Date.now() - inDateTime.getTime()) / 1000
+            );
+            totalWorkingSeconds = Math.max(0, diffSeconds);
+          }
+        }
 
         attendanceRecords.push({
           date: recordDate,
-          totalWorkingSeconds: totalWorkingSeconds,
+          totalWorkingSeconds,
         });
       }
     }
   });
 
-  // Sort data by date in ascending order
-  attendanceRecords.sort((a, b) => a.date.getTime() - b.date.getTime());
-
   if (attendanceRecords.length === 0) {
-    return {
-      status: "error",
-      message: "No working day attendance data found in the table.",
-    };
+    return { status: "error", message: "No working day attendance found." };
   }
 
-  // --- Calculate Weekly Hours (Current Week: from Monday of the current week up to the latest record's date) ---
+  attendanceRecords.sort((a, b) => a.date - b.date);
+
+  // WEEKLY + MONTHLY CALCULATIONS
   let currentWeeklyHours = 0;
   let prevWeeklyHours = 0;
 
-  const latestRecordDate = attendanceRecords[attendanceRecords.length - 1].date;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentWeekMonday = new Date(today);
+  const dow = today.getDay(); // 0 = Sun
+  const daysToSubtract = dow === 0 ? 6 : dow - 1;
+  currentWeekMonday.setDate(today.getDate() - daysToSubtract);
+  currentWeekMonday.setHours(0, 0, 0, 0);
 
-  // Determine the Monday of the week for the latest record date
-  const currentWeekMonday = new Date(latestRecordDate);
-  // getDay() returns 0 for Sunday, 1 for Monday, etc.
-  // To get to Monday, subtract (currentDay - 1) days. If Sunday (0), it's 6 days back.
-  const dayOfWeek = currentWeekMonday.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // If Sunday, go back 6 days to Monday
-  currentWeekMonday.setDate(latestRecordDate.getDate() - daysToSubtract);
-  currentWeekMonday.setHours(0, 0, 0, 0); // Set to start of the day
-
-  // Calculate start and end for previous week
   const prevWeekMonday = new Date(currentWeekMonday);
   prevWeekMonday.setDate(currentWeekMonday.getDate() - 7);
-  prevWeekMonday.setHours(0, 0, 0, 0);
-
-  const prevWeekSunday = new Date(currentWeekMonday); // Sunday before current week's Monday
+  const prevWeekSunday = new Date(currentWeekMonday);
   prevWeekSunday.setDate(currentWeekMonday.getDate() - 1);
   prevWeekSunday.setHours(23, 59, 59, 999);
 
   attendanceRecords.forEach((entry) => {
-    if (entry.date >= currentWeekMonday && entry.date <= latestRecordDate) {
+    if (entry.date >= currentWeekMonday && entry.date <= today) {
       currentWeeklyHours += entry.totalWorkingSeconds;
     }
     if (entry.date >= prevWeekMonday && entry.date <= prevWeekSunday) {
@@ -92,100 +103,82 @@ function parseAttendanceData() {
     }
   });
 
-  // --- Calculate Monthly Hours (Current Period: 25th of prev month to 24th of current/next month) ---
-  let currentMonthlyHours = 0;
-  const now = new Date(); // Use the actual current date for the monthly period calculation
-  now.setHours(0, 0, 0, 0); // Normalize 'now' to start of day
+  // Monthly 26th–25th
+  let currentMonthlyHours = 0,
+    prevMonthlyHours = 0;
+  const monthNow = new Date();
+  monthNow.setHours(0, 0, 0, 0);
 
-  let currentPeriodStart;
-  let currentPeriodEnd;
-
-  if (now.getDate() < 25) {
-    // If current date is before 25th, period is from 25th of (month-1) to 24th of current month
-    currentPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 25);
-    currentPeriodEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      24,
+  let curStart, curEnd, prevStart, prevEnd;
+  if (monthNow.getDate() < 26) {
+    curStart = new Date(monthNow.getFullYear(), monthNow.getMonth() - 1, 26);
+    curEnd = new Date(
+      monthNow.getFullYear(),
+      monthNow.getMonth(),
+      25,
+      23,
+      59,
+      59,
+      999
+    );
+    prevStart = new Date(monthNow.getFullYear(), monthNow.getMonth() - 2, 26);
+    prevEnd = new Date(
+      monthNow.getFullYear(),
+      monthNow.getMonth() - 1,
+      25,
       23,
       59,
       59,
       999
     );
   } else {
-    // If current date is on or after 25th, period is from 25th of current month to 24th of next month
-    currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 25);
-    currentPeriodEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      24,
+    curStart = new Date(monthNow.getFullYear(), monthNow.getMonth(), 26);
+    curEnd = new Date(
+      monthNow.getFullYear(),
+      monthNow.getMonth() + 1,
+      25,
+      23,
+      59,
+      59,
+      999
+    );
+    prevStart = new Date(monthNow.getFullYear(), monthNow.getMonth() - 1, 26);
+    prevEnd = new Date(
+      monthNow.getFullYear(),
+      monthNow.getMonth(),
+      25,
       23,
       59,
       59,
       999
     );
   }
-  currentPeriodStart.setHours(0, 0, 0, 0); // Ensure start is beginning of day
 
-  attendanceRecords.forEach((record) => {
-    if (record.date >= currentPeriodStart && record.date <= currentPeriodEnd) {
-      currentMonthlyHours += record.totalWorkingSeconds;
-    }
+  attendanceRecords.forEach((rec) => {
+    if (rec.date >= curStart && rec.date <= curEnd)
+      currentMonthlyHours += rec.totalWorkingSeconds;
+    if (rec.date >= prevStart && rec.date <= prevEnd)
+      prevMonthlyHours += rec.totalWorkingSeconds;
   });
 
-  // --- Calculate Previous Monthly Hours (25th of prev-prev month to 24th of prev month) ---
-  let prevMonthlyHours = 0;
-  let prevPeriodStart;
-  let prevPeriodEnd;
-
-  if (now.getDate() < 25) {
-    // If current date is before 25th, prev period is from 25th of (month-2) to 24th of (month-1)
-    prevPeriodStart = new Date(now.getFullYear(), now.getMonth() - 2, 25);
-    prevPeriodEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() - 1,
-      24,
-      23,
-      59,
-      59,
-      999
-    );
-  } else {
-    // If current date is on or after 25th, prev period is from 25th of (month-1) to 24th of current month
-    prevPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 25);
-    prevPeriodEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      24,
-      23,
-      59,
-      59,
-      999
-    );
-  }
-  prevPeriodStart.setHours(0, 0, 0, 0); // Ensure start is beginning of day
-
-  attendanceRecords.forEach((record) => {
-    if (record.date >= prevPeriodStart && record.date <= prevPeriodEnd) {
-      prevMonthlyHours += record.totalWorkingSeconds;
-    }
-  });
+  const weeklyTarget = 35 * 3600;
+  const weeklyHoursLeft = Math.max(
+    0,
+    (weeklyTarget - currentWeeklyHours) / 3600
+  );
 
   return {
     status: "success",
     data: {
       weeklyHours: (currentWeeklyHours / 3600).toFixed(2),
-      prevWeeklyHours: (prevWeeklyHours / 3600).toFixed(2), // New field
+      prevWeeklyHours: (prevWeeklyHours / 3600).toFixed(2),
       monthlyHours: (currentMonthlyHours / 3600).toFixed(2),
       prevMonthlyHours: (prevMonthlyHours / 3600).toFixed(2),
+      weeklyHoursLeft: weeklyHoursLeft.toFixed(2),
     },
   };
 }
 
-// Listener for messages from the popup script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "getAttendanceData") {
-    const result = parseAttendanceData();
-    sendResponse(result);
-  }
+chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+  if (req.action === "getAttendanceData") sendResponse(parseAttendanceData());
 });
